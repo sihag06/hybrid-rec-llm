@@ -35,6 +35,39 @@ const SAMPLE_PROMPTS = [
 type Mode = "recommend" | "chat";
 type TimelineStatus = "pending" | "in_progress" | "success" | "error";
 type TimelineStep = { key: string; label: string; status: TimelineStatus };
+type Stats = {
+  total: number;
+  remote_yes: number;
+  adaptive_yes: number;
+  unique_job_levels: number;
+  job_levels: string[];
+  unique_languages: number;
+  languages: string[];
+  unique_test_types: number;
+  test_types: string[];
+};
+const INITIAL_STATS: Stats = {
+  total: 389,
+  remote_yes: 389,
+  adaptive_yes: 38,
+  unique_job_levels: 10,
+  job_levels: [
+    "Entry-Level",
+    "Graduate",
+    "Mid-Professional",
+    "Manager",
+    "Director",
+    "Executive",
+    "Supervisor",
+    "Front Line Manager",
+    "Professional IC",
+    "General Population",
+  ],
+  unique_languages: 12,
+  languages: ["English (USA)", "English International", "French", "German", "Spanish", "Portuguese", "Italian", "Japanese", "Chinese", "Arabic", "Dutch", "Turkish"],
+  unique_test_types: 8,
+  test_types: ["Ability & Aptitude", "Biodata & Situational Judgement", "Competencies", "Development & 360", "Assessment Exercises", "Knowledge & Skills", "Personality & Behavior", "Simulations"],
+};
 const TIMELINE_ORDER: Array<{ key: string; label: string }> = [
   { key: "plan", label: "Plan" },
   { key: "retrieve", label: "Retrieve" },
@@ -77,6 +110,7 @@ export default function Home() {
   const [clarification, setClarification] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<Stats | null>(INITIAL_STATS);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [filters, setFilters] = useState({
     search: "",
@@ -86,9 +120,8 @@ export default function Home() {
     sort: "match" as "match" | "short" | "adaptive",
   });
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>(buildTimeline([], false));
-  const defaultApi = "https://huggingface.co/spaces/AgamP/llm_recommendation_backend";
-
   const abortRef = useRef<AbortController | null>(null);
+  const timelineTimers = useRef<NodeJS.Timeout[]>([]);
 
   useEffect(() => {
     if (history.length && activeIndex === null) {
@@ -106,6 +139,39 @@ export default function Home() {
   useEffect(() => {
     setTimelineSteps(buildTimeline(backendTimeline, loading));
   }, [backendTimeline, loading]);
+
+  const clearSimTimeline = () => {
+    timelineTimers.current.forEach((t) => clearTimeout(t));
+    timelineTimers.current = [];
+  };
+
+  const startSimTimeline = () => {
+    clearSimTimeline();
+    setTimelineSteps(
+      TIMELINE_ORDER.map((s, idx) => ({
+        ...s,
+        status: idx === 0 ? "in_progress" : "pending",
+      }))
+    );
+    const seq: Array<[number, string]> = [
+      [600, "plan"],
+      [1200, "retrieve"],
+      [1800, "rerank"],
+      [2400, "constraints"],
+    ];
+    seq.forEach(([delay, key], i) => {
+      const timer = setTimeout(() => {
+        setTimelineSteps((prev) =>
+          prev.map((step, idx) => {
+            if (step.key === key) return { ...step, status: "success" };
+            if (idx === i + 1) return { ...step, status: "in_progress" };
+            return step;
+          })
+        );
+      }, delay);
+      timelineTimers.current.push(timer);
+    });
+  };
 
   const filteredResults = useMemo(() => {
     let res = [...activeResults];
@@ -149,6 +215,7 @@ export default function Home() {
     if (!query.trim()) return;
     setLoading(true);
     setTimelineSteps(buildTimeline([], true));
+    startSimTimeline();
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -172,18 +239,47 @@ export default function Home() {
     } catch (err: any) {
       setHistory((h) => h.map((item) => (item.id === id ? { ...item, error: err.message } : item)));
     } finally {
+      clearSimTimeline();
       setLoading(false);
     }
   };
 
   const header = (
-    <div className="flex items-center justify-between mb-3">
+    <div className="flex items-center justify-between mb-2">
       <div>
-        <h1 className="text-3xl font-semibold text-slate-900">SHL Assessment Recommender</h1>
-        <p className="text-sm text-slate-600">Chat to get top-10 assessments. Filters and debug on the right.</p>
+        <h1 className="text-3xl font-semibold text-neutral-800">SHL Assessment Recommender</h1>
+        <p className="text-sm text-neutral-600">Chat to get top-10 assessments. Filters and debug on the right.</p>
       </div>
-      <div className="hidden md:flex items-center gap-2 text-xs text-slate-500">
-        <RefreshCw size={16} /> Live against FastAPI backend
+    </div>
+  );
+
+  const statsPanel = (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+      <div className="bg-gradient-to-r from-lime-50 to-white border border-lime-100 rounded-lg shadow-sm p-2">
+        <div className="text-[11px] text-neutral-500">Assessments</div>
+        <div className="text-xl font-semibold text-neutral-800">{stats?.total ?? "—"}</div>
+      </div>
+      <div className="bg-gradient-to-r from-lime-50 to-white border border-lime-100 rounded-lg shadow-sm p-2">
+        <div className="text-[11px] text-neutral-500">Remote-supported</div>
+        <div className="text-xl font-semibold text-neutral-800">{stats?.remote_yes ?? "—"}</div>
+      </div>
+      <div className="bg-gradient-to-r from-lime-50 to-white border border-lime-100 rounded-lg shadow-sm p-2">
+        <div className="text-[11px] text-neutral-500">Adaptive</div>
+        <div className="text-xl font-semibold text-neutral-800">{stats?.adaptive_yes ?? "—"}</div>
+      </div>
+      <div className="bg-gradient-to-r from-lime-50 to-white border border-lime-100 rounded-lg shadow-sm p-2 col-span-1 lg:col-span-2">
+        <div className="text-[11px] text-neutral-500">
+          Job levels ({stats?.unique_job_levels ?? "—"})
+        </div>
+        <div className="text-xs text-neutral-700 truncate">
+          {stats?.job_levels && stats.job_levels.length ? stats.job_levels.join(", ") : "N/A"}
+        </div>
+      </div>
+      <div className="bg-gradient-to-r from-lime-50 to-white border border-lime-100 rounded-lg shadow-sm p-2">
+        <div className="text-[11px] text-neutral-500">Test types</div>
+        <div className="text-xs text-neutral-700 truncate">
+          {stats?.test_types && stats.test_types.length ? stats.test_types.join(", ") : "N/A"}
+        </div>
       </div>
     </div>
   );
@@ -191,7 +287,7 @@ export default function Home() {
   const settings = (
     <div className="flex flex-wrap gap-3 text-sm">
       <div className="flex items-center gap-2">
-        <label className="font-medium">Mode</label>
+        <label className="font-medium">API</label>
         <select
           className="border rounded px-2 py-1"
           value={mode}
@@ -199,6 +295,7 @@ export default function Home() {
         >
           <option value="recommend">/recommend</option>
           <option value="chat">/chat</option>
+          <option value="health">/health</option>
         </select>
       </div>
       <div className="flex items-center gap-2">
@@ -219,7 +316,7 @@ export default function Home() {
 
   const chatPanel = (
     <div className="flex flex-col h-full">
-      <div className="flex flex-col gap-3 flex-1 overflow-hidden bg-white border rounded-xl shadow-sm p-4">
+      <div className="flex flex-col gap-3 flex-1 overflow-hidden bg-white border border-neutral-300 rounded-xl shadow-sm p-4">
         <div className="flex items-center justify-between">
           <div className="text-lg font-semibold flex items-center gap-2">
             <Send size={18} /> Chat
@@ -228,7 +325,7 @@ export default function Home() {
             onClick={() => {
               setQuery(SAMPLE_PROMPTS[0]);
             }}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-neutral-700 hover:underline"
           >
             Use sample
           </button>
@@ -241,8 +338,13 @@ export default function Home() {
             onChange={(e) => setApiBase(e.target.value)}
           />
         </div>
+        {loading && (
+          <div className="text-xs text-neutral-600 bg-neutral-100 border border-neutral-200 rounded px-3 py-2">
+            Processing your request. This may take a few seconds—thanks for your patience.
+          </div>
+        )}
         <textarea
-          className="border rounded-lg p-3 w-full text-sm min-h-[140px] resize-none focus:ring-2 focus:ring-blue-200"
+          className="border rounded-lg p-3 w-full text-sm min-h-[140px] resize-none focus:ring-2 focus:ring-lime-200"
           placeholder="Enter job description or query"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -258,7 +360,7 @@ export default function Home() {
             <button
               key={p}
               onClick={() => setQuery(p)}
-              className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
+              className="text-xs bg-neutral-100 text-neutral-800 hover:bg-neutral-200 px-2 py-1 rounded border border-neutral-200"
             >
               {p}
             </button>
@@ -274,7 +376,7 @@ export default function Home() {
           <button
             onClick={send}
             disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 disabled:opacity-60"
+            className="bg-neutral-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-neutral-900 disabled:opacity-60 shadow-sm"
           >
             <Send size={16} /> {loading ? "Sending..." : "Send"}
           </button>
@@ -292,10 +394,20 @@ export default function Home() {
           >
             <Settings size={16} />
           </button>
+          <button
+            onClick={() => {
+              setQuery(SAMPLE_PROMPTS[0]);
+              setClarification("");
+            }}
+            className="p-2 border rounded-lg hover:bg-slate-100"
+            title="Reset"
+          >
+            <RefreshCw size={16} />
+          </button>
         </div>
         {settings}
       </div>
-      <div className="mt-3 bg-white border rounded-xl shadow-sm p-3 text-sm text-slate-600 max-h-48 overflow-auto">
+      <div className="mt-2 bg-white border border-neutral-200 rounded-xl shadow-sm p-3 text-sm text-neutral-600 max-h-36 overflow-auto">
         <div className="font-semibold mb-2">History</div>
         {history.length === 0 && <div className="text-slate-400">No queries yet.</div>}
         {history.map((h, idx) => (
@@ -303,7 +415,7 @@ export default function Home() {
             key={h.id}
             onClick={() => setActiveIndex(idx)}
             className={`block w-full text-left px-2 py-1 rounded ${
-              idx === activeIndex ? "bg-blue-50 text-blue-700" : "hover:bg-slate-100"
+              idx === activeIndex ? "bg-neutral-100 text-neutral-900 border border-neutral-200" : "hover:bg-slate-100"
             }`}
           >
             <div className="font-medium text-sm truncate">{h.query}</div>
@@ -317,7 +429,7 @@ export default function Home() {
 
   const resultsPanel = (
     <div className="flex flex-col h-full">
-      <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-3 h-[75vh]">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex flex-col gap-2 h-[68vh]">
         <div className="flex items-center justify-between">
           <div className="text-lg font-semibold flex items-center gap-2">
             <Filter size={18} /> Results
@@ -332,9 +444,9 @@ export default function Home() {
             {timelineSteps.map((step, idx) => {
               const color =
                 step.status === "success"
-                  ? "bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-800 border-emerald-200"
+                  ? "bg-gradient-to-r from-lime-50 to-lime-100 text-lime-800 border-lime-200"
                   : step.status === "in_progress"
-                  ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-800 border-blue-200"
+                  ? "bg-gradient-to-r from-neutral-100 to-neutral-200 text-neutral-800 border-neutral-200"
                   : step.status === "error"
                   ? "bg-gradient-to-r from-red-50 to-red-100 text-red-800 border-red-200"
                   : "bg-slate-50 text-slate-600 border-slate-200";
@@ -381,7 +493,7 @@ export default function Home() {
         </div>
         <div className="flex flex-wrap gap-3 text-xs">
           <select
-            className="border rounded px-2 py-1"
+              className="border rounded px-2 py-1"
             value={filters.remote}
             onChange={(e) => setFilters((f) => ({ ...f, remote: e.target.value as any }))}
           >
@@ -425,18 +537,18 @@ export default function Home() {
             <div className="text-sm text-slate-500">No results yet. Submit a query to see recommendations.</div>
           )}
           {filteredResults.map((r, idx) => (
-            <div key={idx} className="border rounded-xl p-4 shadow-sm hover:shadow-md transition bg-slate-50">
+            <div key={idx} className="border rounded-xl p-4 shadow-sm hover:shadow-md transition bg-slate-50 border-slate-200">
               <div className="flex items-start justify-between gap-2">
                 <a
                   href={r.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-semibold text-slate-900 hover:text-blue-600"
+                  className="font-semibold text-neutral-900 hover:text-neutral-700"
                 >
                   {r.name || "Untitled"}
                 </a>
                 <button
-                  className="text-slate-500 hover:text-blue-600"
+                  className="text-slate-500 hover:text-neutral-700"
                   onClick={() => r.url && navigator.clipboard.writeText(r.url)}
                 >
                   <LinkIcon size={16} />
@@ -444,17 +556,17 @@ export default function Home() {
               </div>
               <div className="flex flex-wrap gap-2 mt-2">
                 {r.test_type?.map((t) => (
-                  <span key={t} className="text-[11px] bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-100">
+                  <span key={t} className="text-[11px] bg-neutral-100 text-neutral-800 px-2 py-1 rounded-full border border-neutral-200">
                     {t}
                   </span>
                 ))}
                 <span className="text-[11px] bg-slate-100 text-slate-700 px-2 py-1 rounded-full border border-slate-200">
                   {r.duration ? `${r.duration} min` : "Duration unknown"}
                 </span>
-                <span className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full border border-emerald-100">
+                <span className="text-[11px] bg-lime-50 text-lime-700 px-2 py-1 rounded-full border border-lime-100">
                   Remote: {r.remote_support || "?"}
                 </span>
-                <span className="text-[11px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full border border-indigo-100">
+                <span className="text-[11px] bg-neutral-100 text-neutral-800 px-2 py-1 rounded-full border border-neutral-200">
                   Adaptive: {r.adaptive_support || "?"}
                 </span>
               </div>
@@ -493,10 +605,11 @@ export default function Home() {
   );
 
   return (
-    <main className="min-h-screen bg-slate-100">
-      <div className="app-shell py-6">
+    <main className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100">
+      <div className="app-shell py-4">
         {header}
-        <div className="grid lg:grid-cols-2 gap-6 mt-4">
+        {statsPanel}
+        <div className="grid lg:grid-cols-2 gap-4 mt-3">
           {chatPanel}
           {resultsPanel}
         </div>

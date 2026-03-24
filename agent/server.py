@@ -382,7 +382,6 @@ def recommend(req: RecommendRequest):
 def health():
     return {"status": "ok"}
 
-
 @app.get("/")
 def index():
     # Serve the SPA entry point
