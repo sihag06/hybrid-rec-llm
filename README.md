@@ -1,4 +1,7 @@
 # llm_recommendation_engine
+> ![NOTE]
+> local, low-latency, open-source stack; no external vector DBs (e.g., Weaviate/Pinecone) or heavy agent frameworks yet. Focus is on core IR/LLM components and reproducible experiments. Agentic layers (CrewAI/LangChain-style tool use) can be added later if needed.
+
 - Crawl & normalize: Playwright → enriched catalog (377→389 after parser fixes)
 - Index: BGE-small embeddings + FAISS flat; BM25 for lexical parity
 - Retrieve: BM25 + dense via weighted RRF (k_rrf=60, topn=200)
