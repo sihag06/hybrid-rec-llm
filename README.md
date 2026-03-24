@@ -1,5 +1,49 @@
 # llm_recommendation_engine
-Recommendation engine for SHL's product catalogue with conversational agents
+Hybrid SHL assessment recommender: Playwright crawler → catalog normalization → BM25 + dense retrieval with weighted RRF → cross-encoder rerank → LLM-based query rewriting/planning → Next.js frontend. For deeper technical details (catalog growth 377→389, index variants, fusion math, rerank training, eval tables, and agentic roadmap), see `experiments/README.md`.
+
+## Architecture at a glance
+
+![Architecture](media/architecture.png)
+
+- Catalog build: crawl → clean → enrich roles/flags/duration → rich text → embed (BGE-small) → FAISS flat index.
+- Query understanding: deterministic parser + optional LLM rewrite/planner (Qwen/NuExtract; FLAN fallback) before retrieval.
+- Retrieval: BM25 + dense (BGE) fused via weighted Reciprocal Rank Fusion (k_rrf=60, topn=200).
+- Rerank: finetuned cross-encoder (`models/reranker_crossenc/v0.1.0`, MiniLM-based) to top-10.
+- Constraints: duration/remote/adaptive filters with safe fallbacks.
+- Serving: FastAPI (`/recommend`, `/health`) + Next.js frontend (configurable API base).
+
+## Hosted services
+- Backend (FastAPI) on Hugging Face Spaces: `https://agamp-llm-recommendation-backend.hf.space`
+  - Endpoints: `/recommend`, `/health`, `/chat` (planned).
+  - Repo: https://huggingface.co/spaces/AgamP/llm_recommendation_backend/tree/main
+  - Set the frontend API base to this URL for production.
+- Frontend (Next.js static) on Render (free tier): https://llm-recommendation-engine.onrender.com/
+
+![platform frontend](media/frontend.png)
+
+## Startup the system on local: Frontend + backend (Next.js + FastAPI)
+
+Backend (FastAPI):
+
+```bash 
+uvicorn agent.server:app --reload --port 8000
+GET /health
+POST /recommend` with `{"query": "..."}` returns {"recommended_assessments": [...]}(top-10)
+```
+
+Frontend (Next.js in `frontend/`):
+```bash 
+- Install deps: cd frontend && npm install
+- Dev: npm run dev (port 3000; set API base in UI if backend differs)
+- Build/start: npm run build && npm run start
+- UI: http://localhost:3000/` (API base defaults to `http://localhost:8000`, editable in the UI)
+```
+
+## Docker (backend)
+- Build image: `docker build -t llm-reco-backend .`
+- Run: `docker run -p 8000:8000 --env-file .env llm-reco-backend`
+- Persist HF cache (faster cold starts on Spaces-like hosts): `-v $HOME/.cache/huggingface:/home/user/.cache/huggingface`
+
 
 ## Quick commands (crawler + export + QA)
 - Install deps (and Playwright browser): `python -m pip install -r requirements.txt && python -m playwright install chromium`
@@ -13,24 +57,25 @@ Recommendation engine for SHL's product catalogue with conversational agents
   - Summary JSON saved to `data/qa_summary.json`
 
 ## What’s implemented
-- Playwright-based crawler with catalog pagination, detail fetch, and structured storage in SQLite.
-- Field extraction: url, name, description, test_type (+full), remote/adaptive flags, duration (minutes/hours), job_levels, languages, downloads.
+- Playwright-based crawler with pagination + detail fetch into SQLite.
+- Field extraction: url, name, description, test_type (+full), remote/adaptive flags, duration, job_levels, languages, downloads.
 - Export to Parquet/JSONL plus QA summary script for downstream sanity checks.
+- Default artifacts: `data/catalog_docs_rich.jsonl` (389 items), FAISS `data/faiss_index/index_bge.faiss`, embeddings map `data/embeddings_bge/assessment_ids.json`, optional vocab `data/catalog_role_vocab.json`.
 
-## Evaluation harness (Phase 2)
+## Evaluation harness
 - Catalog loader with canonical IDs: `python -m data.catalog_loader --input data/catalog.jsonl --output data/catalog_with_ids.jsonl`
 - Train loader + label resolution report: `python -m data.train_loader --catalog data/catalog.jsonl --train <train_file> --report data/label_resolution_report.json`
 - Run eval (dummy baseline): `python -m eval.run_eval --catalog data/catalog.jsonl --train <train_file> --recommender dummy_random`
   - Run eval (BM25 baseline): `python -m eval.run_eval --catalog data/catalog.jsonl --train <train_file> --recommender bm25`
-  - Outputs run folder under `runs/<timestamp>_<recommender>/` with `metrics.json`, `per_query_results.jsonl`, `worst_queries.csv`, `label_resolution_report.json`
+  - Outputs: `runs/<timestamp>_<recommender>/metrics.json`, `per_query_results.jsonl`, `worst_queries.csv`, `label_resolution_report.json`
 - Compare runs: `python -m eval.compare_runs runs/<run_a> runs/<run_b>`
 
-Recommender interface lives in `recommenders/base.py`; a random baseline is in `recommenders/dummy_random.py`. Metrics (Recall@k, MRR@10) are in `eval/metrics.py`.
+Recommender interface: `recommenders/base.py`. Metrics: `eval/metrics.py` (Recall@k, MRR@10).
 
 ## Label probing & backfill (improve label coverage)
-- Probe unmatched label URLs (after a label match run): `python -m scripts.probe_unmatched_labels --labels data/label_resolution_report.json --output reports/label_url_probe.csv` — classifies label URLs (valid detail vs 404/blocked).
-- Backfill valid label pages into DB: `python -m crawler.backfill_labels --probe-csv reports/label_url_probe.csv --allow-robots-bypass` — fetches & inserts DETAIL_PAGE_VALID URLs.
-- Re-export and rematch after backfill:
+- Probe unmatched label URLs: `python -m scripts.probe_unmatched_labels --labels data/label_resolution_report.json --output reports/label_url_probe.csv` — classifies detail vs 404/blocked.
+- Backfill valid pages: `python -m crawler.backfill_labels --probe-csv reports/label_url_probe.csv --allow-robots-bypass`
+- Re-export and rematch:
   - `python -m crawler.run --mode=export`
   - `python -m data.catalog_loader --input data/catalog.jsonl --output data/catalog_with_ids.jsonl`
   - `python -m data.train_loader --catalog data/catalog.jsonl --train <train_file> --sheet "Train-Set" --report data/label_resolution_report.json`
@@ -39,18 +84,14 @@ Recommender interface lives in `recommenders/base.py`; a random baseline is in `
 - Build doc_text: `python -m data.document_builder --input data/catalog.jsonl --output data/catalog_docs.jsonl`
 - Generate embeddings: `python -m embeddings.generator --catalog data/catalog_docs.jsonl --model sentence-transformers/all-MiniLM-L6-v2 --output-dir data/embeddings`
 - Build FAISS index: `python -m retrieval.build_index --embeddings data/embeddings/embeddings.npy --ids data/embeddings/assessment_ids.json --index-path data/faiss_index/index.faiss`
-- Vector components:
-  - Model wrapper: `models/embedding_model.py`
-  - Index wrapper: `retrieval/vector_index.py`
-  - Index builder script: `retrieval/build_index.py`
-  - Vector recommender scaffold: `recommenders/vector_recommender.py` (wire with assessment_ids + index)
+- Components: `models/embedding_model.py`, `retrieval/vector_index.py`, `retrieval/build_index.py`, `recommenders/vector_recommender.py`.
 
 ## Hybrid retrieval (BM25 + vector with RRF)
 - Run hybrid eval: `python -m eval.run_eval --catalog data/catalog_docs.jsonl --train data/Gen_AI\ Dataset.xlsx --recommender hybrid_rrf --vector-index data/faiss_index/index.faiss --assessment-ids data/embeddings/assessment_ids.json --model sentence-transformers/all-MiniLM-L6-v2 --topn-candidates 200 --rrf-k 60`
 - Run hybrid + cross-encoder rerank: `python -m eval.run_eval --catalog data/catalog_docs.jsonl --train data/Gen_AI\ Dataset.xlsx --recommender hybrid_rrf_rerank --vector-index data/faiss_index/index.faiss --assessment-ids data/embeddings/assessment_ids.json --model sentence-transformers/all-MiniLM-L6-v2 --reranker-model cross-encoder/ms-marco-MiniLM-L-6-v2 --topn-candidates 200 --rrf-k 60`
 - Run hybrid + LGBM rerank: `python -m eval.run_eval --catalog data/catalog_docs.jsonl --train data/Gen_AI\ Dataset.xlsx --recommender hybrid_rrf_lgbm --vector-index data/faiss_index/index.faiss --assessment-ids data/embeddings/assessment_ids.json --model sentence-transformers/all-MiniLM-L6-v2 --topn-candidates 200 --rrf-k 60 --lgbm-model models/reranker/v0.1.0/lgbm_model.txt --lgbm-features models/reranker/v0.1.0/feature_schema.json`
 - Diagnostics (positives in top-N vs top-10): `python -m eval.diagnostic_topk --catalog data/catalog_docs.jsonl --train data/Gen_AI\ Dataset.xlsx --vector-index data/faiss_index/index.faiss --assessment-ids data/embeddings/assessment_ids.json --model sentence-transformers/all-MiniLM-L6-v2 --topn 200`
-- Run ablation (bm25/vector/hybrid across topN): `python -m scripts.run_ablation --catalog data/catalog_docs.jsonl --train data/Gen_AI\ Dataset.xlsx --vector-index data/faiss_index/index.faiss --assessment-ids data/embeddings/assessment_ids.json --model sentence-transformers/all-MiniLM-L6-v2 --topn-list 100,200,377`
+- Run ablation (bm25/vector/hybrid across topN): `python -m scripts.run_ablation --catalog data/catalog.jsonl --train data/Gen_AI\ Dataset.xlsx --vector-index data/faiss_index/index.faiss --assessment-ids data/embeddings/assessment_ids.json --model sentence-transformers/all-MiniLM-L6-v2 --topn-list 100,200,377`
 
 ## Current findings & next steps
 - Candidate coverage is solved by top200; ranking is the bottleneck. Use union fusion + rerank.
@@ -134,16 +175,20 @@ python -m scripts.eval_rewrite_impact \
   --out runs/rewrite_impact.jsonl
 ```
 
-## Frontend + backend (Next.js + FastAPI)
+## Recommended stack (prod defaults)
+- Retrieval: BM25 + BGE-small + RRF fusion (topn=200, k_rrf=60).
+- Rewrite: Qwen/Qwen2.5-1.5B-Instruct when available; deterministic fallback otherwise.
+- Rerank: Cross-encoder `models/reranker_crossenc/v0.1.0` to top-10.
+- Constraints: duration/remote/adaptive post-filters; guarantee at least one result.
+- Caching: set `HF_HOME=/home/user/.cache/huggingface` on Spaces to avoid cold-start downloads.
 
-Backend (FastAPI):
-- Start: `uvicorn agent.server:app --reload --port 8000`
-- Health: `GET /health`
-- Chat: `POST /chat` (returns compact top-10 + optional summary when verbose=true)
-- Recommend: `POST /recommend` with `{"query": "..."}` returns `{"recommended_assessments": [...]}` (top-10)
+## Evaluation highlights (val split 52/13)
+| Pipeline                                | recall@10 | recall@5 | MRR@10 |
+|-----------------------------------------|-----------|----------|--------|
+| Hybrid RRF + rerank + rewrite (best)    | 0.4615    | 0.1538   | 0.1250 |
+| Hybrid RRF + rerank                     | 0.3846    | 0.2308   | 0.1865 |
+| Hybrid RRF (no rerank)                  | 0.2308    | 0.0769   | 0.0000 |
+| Vector only                             | 0.1538    | 0.0769   | 0.0000 |
+| BM25 only                               | 0.0769    | 0.0000   | 0.0000 |
 
-Frontend (Next.js in `frontend/`):
-- Install deps: `cd frontend && npm install`
-- Dev: `npm run dev` (will start on port 3000; ensure backend is running on 8000 or set API base in UI)
-- Build/start: `npm run build && npm run start`
-- UI is at `http://localhost:3000/` (API base defaults to `http://localhost:8000`, editable in the UI)
+More detail (fusion math, rerank training setup, ablations, future agentic extensions) lives in `experiments/README.md`.
