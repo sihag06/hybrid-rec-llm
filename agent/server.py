@@ -336,7 +336,10 @@ app.add_middleware(
 )
 
 # Serve frontend assets
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
+# Serve the pre-built Next.js static export (produced by `npm run build`)
+_FRONTEND_OUT = os.path.join(os.path.dirname(__file__), "..", "frontend", "out")
+if os.path.isdir(_FRONTEND_OUT):
+    app.mount("/static", StaticFiles(directory=_FRONTEND_OUT), name="static")
 
 # Simple in-process rate limiter (max 5 requests per second)
 _timestamps = deque()
@@ -388,5 +391,6 @@ def health():
 
 @app.get("/")
 def index():
-    # Serve the SPA entry point
-    return FileResponse("frontend/index.html")
+    # Serve the pre-built Next.js SPA entry point
+    out_index = os.path.join(os.path.dirname(__file__), "..", "frontend", "out", "index.html")
+    return FileResponse(out_index)

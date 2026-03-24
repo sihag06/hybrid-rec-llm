@@ -1,3 +1,13 @@
+---
+title: Hybrid IR RAG Recommender
+emoji: 🔍
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Hybrid IR RAG Recommender with LLM Query Planner
 > [!NOTE]
 > local, low-latency, open-source stack; no external vector DBs (e.g., Weaviate/Pinecone) or heavy agent frameworks yet. Focus is on core IR/LLM components and reproducible experiments. Agentic layers (CrewAI/LangChain-style tool use) can be added later if needed.
@@ -9,8 +19,8 @@
 - Rewrite/plan: deterministic + LLM (Qwen/NuExtract; FLAN fallback) before retrieval
 - Serve/UI: FastAPI (`/recommend`) + Next.js frontend
 
-For design rationale, metrics, and ablations, see [experiments/README.md](https://github.com/AGAMPANDEYY/llm_recommendation_engine/tree/main/experiments).
-2 page report can be found [here](https://github.com/AGAMPANDEYY/llm_recommendation_engine/blob/main/Research_report.pdf)
+For design rationale, metrics, and ablations, see [experiments/README.md](https://github.com/sihag06/llm_recommendation_engine/tree/main/experiments).
+2 page report can be found [here](https://github.com/sihag06/llm_recommendation_engine/blob/main/Research_report.pdf)
 
 ## Architecture at a glance
 
@@ -24,16 +34,16 @@ For design rationale, metrics, and ablations, see [experiments/README.md](https:
 - Serving: FastAPI (`/recommend`, `/health`) + Next.js frontend (configurable API base).
 
 ## Hosted services
-- Backend (FastAPI) on Hugging Face Spaces: https://agamp-llm-recommendation-backend.hf.space 
+- Backend (FastAPI) on Hugging Face Spaces: https://indr06-llm-recommendation-backend.hf.space 
   - Endpoints: `/recommend`, `/health`, `/chat` (planned).
-  - Repo: https://huggingface.co/spaces/AgamP/llm_recommendation_backend/tree/main
+  - Repo: https://huggingface.co/spaces/indr06/llm_recommendation_backend/tree/main
   - Set the frontend API base to this URL for production.
 - Frontend (Next.js static) on Render (free tier): https://llm-recommendation-engine.onrender.com/
 
 Call the backend with CuRL
 ```bash
 
-curl -i -X POST https://agamp-llm-recommendation-backend.hf.space/recommend \
+curl -i -X POST https://indr06-llm-recommendation-backend.hf.space/recommend \
   -H "Content-Type: application/json" \
   -d '{"query": "Find a Java developer assessment"}'
 
