@@ -1,5 +1,13 @@
 # llm_recommendation_engine
-Hybrid SHL assessment recommender: Playwright crawler → catalog normalization → BM25 + dense retrieval with weighted RRF → cross-encoder rerank → LLM-based query rewriting/planning → Next.js frontend. For deeper technical details (catalog growth 377→389, index variants, fusion math, rerank training, eval tables, and agentic roadmap), see `experiments/README.md` (experiments/README.md).
+End-to-end SHL assessment recommender, built like a production ML system:
+- Crawl & normalize: Playwright → enriched catalog (377→389 after parser fixes)
+- Index: BGE-small embeddings + FAISS flat; BM25 for lexical parity
+- Retrieve: BM25 + dense via weighted RRF (k_rrf=60, topn=200)
+- Rerank: finetuned MiniLM cross-encoder (`models/reranker_crossenc/v0.1.0`) to top-10
+- Rewrite/plan: deterministic + LLM (Qwen/NuExtract; FLAN fallback) before retrieval
+- Serve/UI: FastAPI (`/recommend`) + Next.js frontend
+
+For design rationale, metrics, and ablations, see `experiments/README.md`.
 
 ## Architecture at a glance
 
@@ -25,18 +33,22 @@ Hybrid SHL assessment recommender: Playwright crawler → catalog normalization 
 
 Backend (FastAPI):
 
-```bash 
+```bash
 uvicorn agent.server:app --reload --port 8000
-GET /health
-POST /recommend` with `{"query": "..."}` returns {"recommended_assessments": [...]}(top-10)
+# health
+curl http://localhost:8000/health
+# recommend
+curl -X POST http://localhost:8000/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Find a Java dev assessment"}'
 ```
 
 Frontend (Next.js in `frontend/`):
-```bash 
+```bash
 cd frontend && npm install
-npm run dev (port 3000; set API base in UI if backend differs)
+npm run dev        # port 3000; set API base in UI if backend differs
 npm run build && npm run start
-http://localhost:3000/` (API base defaults to `http://localhost:8000`, editable in the UI)
+# UI at http://localhost:3000/ (API base defaults to http://localhost:8000)
 ```
 Docker on hf spaces (backend)
 ```bash
