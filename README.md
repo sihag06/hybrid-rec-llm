@@ -1,5 +1,4 @@
 # llm_recommendation_engine
-End-to-end SHL assessment recommender, built like a production ML system:
 - Crawl & normalize: Playwright → enriched catalog (377→389 after parser fixes)
 - Index: BGE-small embeddings + FAISS flat; BM25 for lexical parity
 - Retrieve: BM25 + dense via weighted RRF (k_rrf=60, topn=200)
