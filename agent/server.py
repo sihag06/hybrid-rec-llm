@@ -370,9 +370,13 @@ def chat(req: ChatRequest):
 def recommend(req: RecommendRequest):
     if not _allow_request():
         return {"error": "rate limit exceeded"}
-    final_results, summary, debug_payload = _run_pipeline(req.query, verbose=req.verbose, llm_model=req.llm_model)
+    llm_model = req.llm_model or "Qwen/Qwen2.5-1.5B-Instruct"
+    verbose = bool(req.verbose) if req.verbose is not None else False
+    final_results, summary, debug_payload = _run_pipeline(
+        req.query, verbose=verbose, llm_model=llm_model
+    )
     resp = {"recommended_assessments": final_results}
-    if req.verbose:
+    if verbose:
         resp["debug"] = _sanitize_debug(debug_payload)
         resp["summary"] = summary
     return resp
@@ -380,7 +384,7 @@ def recommend(req: RecommendRequest):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "healthy"}
 
 @app.get("/")
 def index():
