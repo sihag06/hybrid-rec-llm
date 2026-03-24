@@ -1,5 +1,5 @@
 # llm_recommendation_engine
-Hybrid SHL assessment recommender: Playwright crawler → catalog normalization → BM25 + dense retrieval with weighted RRF → cross-encoder rerank → LLM-based query rewriting/planning → Next.js frontend. For deeper technical details (catalog growth 377→389, index variants, fusion math, rerank training, eval tables, and agentic roadmap), see `experiments/README.md`.
+Hybrid SHL assessment recommender: Playwright crawler → catalog normalization → BM25 + dense retrieval with weighted RRF → cross-encoder rerank → LLM-based query rewriting/planning → Next.js frontend. For deeper technical details (catalog growth 377→389, index variants, fusion math, rerank training, eval tables, and agentic roadmap), see `experiments/README.md` (experiments/README.md).
 
 ## Architecture at a glance
 
@@ -33,42 +33,48 @@ POST /recommend` with `{"query": "..."}` returns {"recommended_assessments": [..
 
 Frontend (Next.js in `frontend/`):
 ```bash 
-- Install deps: cd frontend && npm install
-- Dev: npm run dev (port 3000; set API base in UI if backend differs)
-- Build/start: npm run build && npm run start
-- UI: http://localhost:3000/` (API base defaults to `http://localhost:8000`, editable in the UI)
+cd frontend && npm install
+npm run dev (port 3000; set API base in UI if backend differs)
+npm run build && npm run start
+http://localhost:3000/` (API base defaults to `http://localhost:8000`, editable in the UI)
+```
+Docker on hf spaces (backend)
+```bash
+docker build -t llm-reco-backend .  #buid image
+docker run -p 8000:8000 --env-file .env llm-reco-backend #run 
+-v $HOME/.cache/huggingface:/home/user/.cache/huggingface #for hf caching
 ```
 
-## Docker (backend)
-- Build image: `docker build -t llm-reco-backend .`
-- Run: `docker run -p 8000:8000 --env-file .env llm-reco-backend`
-- Persist HF cache (faster cold starts on Spaces-like hosts): `-v $HOME/.cache/huggingface:/home/user/.cache/huggingface`
+### Quick commands (crawler + export + QA)
 
+```bash
+Install deps (and Playwright browser): `python -m pip install -r requirements.txt && python -m playwright install chromium`
+Clean DB: `rm -f data/crawler.db`
+Crawl (bypass robots if needed): `ALLOW_ROBOTS_BYPASS=1 python -m crawler.run --mode=crawl_all --max-discover=20`
+  Drop `--max-discover` for full crawl.
+Export dataset: `python -m crawler.run --mode=export --limit-export=20`
+   Outputs: `data/catalog.parquet`, `data/catalog.jsonl`
+   Drop `--limit-export` for full export.
+QA checks: `python -m crawler.qa_checks data/catalog.jsonl > data/qa_summary.json`
+  Summary JSON saved to `data/qa_summary.json`
+```
 
-## Quick commands (crawler + export + QA)
-- Install deps (and Playwright browser): `python -m pip install -r requirements.txt && python -m playwright install chromium`
-- Clean DB: `rm -f data/crawler.db`
-- Crawl (bypass robots if needed): `ALLOW_ROBOTS_BYPASS=1 python -m crawler.run --mode=crawl_all --max-discover=20`
-  - Drop `--max-discover` for full crawl.
-- Export dataset: `python -m crawler.run --mode=export --limit-export=20`
-  - Outputs: `data/catalog.parquet`, `data/catalog.jsonl`
-  - Drop `--limit-export` for full export.
-- QA checks: `python -m crawler.qa_checks data/catalog.jsonl > data/qa_summary.json`
-  - Summary JSON saved to `data/qa_summary.json`
-
-## What’s implemented
+### What’s implemented
 - Playwright-based crawler with pagination + detail fetch into SQLite.
 - Field extraction: url, name, description, test_type (+full), remote/adaptive flags, duration, job_levels, languages, downloads.
 - Export to Parquet/JSONL plus QA summary script for downstream sanity checks.
 - Default artifacts: `data/catalog_docs_rich.jsonl` (389 items), FAISS `data/faiss_index/index_bge.faiss`, embeddings map `data/embeddings_bge/assessment_ids.json`, optional vocab `data/catalog_role_vocab.json`.
 
-## Evaluation harness
-- Catalog loader with canonical IDs: `python -m data.catalog_loader --input data/catalog.jsonl --output data/catalog_with_ids.jsonl`
-- Train loader + label resolution report: `python -m data.train_loader --catalog data/catalog.jsonl --train <train_file> --report data/label_resolution_report.json`
-- Run eval (dummy baseline): `python -m eval.run_eval --catalog data/catalog.jsonl --train <train_file> --recommender dummy_random`
-  - Run eval (BM25 baseline): `python -m eval.run_eval --catalog data/catalog.jsonl --train <train_file> --recommender bm25`
-  - Outputs: `runs/<timestamp>_<recommender>/metrics.json`, `per_query_results.jsonl`, `worst_queries.csv`, `label_resolution_report.json`
-- Compare runs: `python -m eval.compare_runs runs/<run_a> runs/<run_b>`
+## Eval
+
+```python 
+Catalog loader with canonical IDs: `python -m data.catalog_loader --input data/catalog.jsonl --output data/catalog_with_ids.jsonl`
+Train loader + label resolution report: `python -m data.train_loader --catalog data/catalog.jsonl --train <train_file> --report data/label_resolution_report.json`
+Run eval (dummy baseline): `python -m eval.run_eval --catalog data/catalog.jsonl --train <train_file> --recommender dummy_random`
+  Run eval (BM25 baseline): `python -m eval.run_eval --catalog data/catalog.jsonl --train <train_file> --recommender bm25`
+  Outputs: `runs/<timestamp>_<recommender>/metrics.json`, `per_query_results.jsonl`, `worst_queries.csv`, `label_resolution_report.json`
+Compare runs: `python -m eval.compare_runs runs/<run_a> runs/<run_b>`
+```
 
 Recommender interface: `recommenders/base.py`. Metrics: `eval/metrics.py` (Recall@k, MRR@10).
 
