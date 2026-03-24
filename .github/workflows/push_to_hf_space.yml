@@ -1,0 +1,35 @@
+name: Push to Hugging Face Space
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  sync-to-hf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "ci@github"
+          git config --global user.name "github-actions"
+
+          # Clone the Space repo
+          git clone https://AgamP:$HF_TOKEN@huggingface.co/spaces/AgamP/llm_recommendation_backend hf_space
+          
+          # Replace Space contents with GitHub repo contents (except .git)
+          rsync -av --delete \
+            --exclude ".git" \
+            --exclude "hf_space" \
+            ./ hf_space/
+
+          cd hf_space
+          git add -A
+          git commit -m "Sync from GitHub $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
+          git push
