@@ -17,3 +17,4 @@ frontend/node_modules/
 .model_cache/
 data
 data/
+models/reranker_crossenc/v0.1.0/
