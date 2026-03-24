@@ -75,7 +75,7 @@ const TIMELINE_ORDER: Array<{ key: string; label: string }> = [
   { key: "constraints", label: "Finalize" },
 ];
 
-const DEFAULT_API_BASE = "https://agamp-llm-recommendation-backend.hf.space";
+const DEFAULT_API_BASE = ""; // Relative to current origin by default for self-hosting on Spaces
 
 function buildTimeline(backendTimeline: any, loading: boolean): TimelineStep[] {
   const status: Record<string, TimelineStatus> = {};
@@ -127,6 +127,13 @@ export default function Home() {
       setActiveIndex(history.length - 1);
     }
   }, [history, activeIndex]);
+
+  // Migration: Clear old hardcoded AGAMP API base from local storage if present
+  useEffect(() => {
+    if (apiBase === "https://agamp-llm-recommendation-backend.hf.space") {
+      setApiBase("");
+    }
+  }, [apiBase, setApiBase]);
 
   const activeItem = activeIndex !== null ? history[activeIndex] : null;
   const activeResults = (activeItem?.response?.recommended_assessments ||
@@ -407,9 +414,8 @@ export default function Home() {
           <button
             key={h.id}
             onClick={() => setActiveIndex(idx)}
-            className={`block w-full text-left px-2 py-1 rounded ${
-              idx === activeIndex ? "bg-neutral-100 text-neutral-900 border border-neutral-200" : "hover:bg-slate-100"
-            }`}
+            className={`block w-full text-left px-2 py-1 rounded ${idx === activeIndex ? "bg-neutral-100 text-neutral-900 border border-neutral-200" : "hover:bg-slate-100"
+              }`}
           >
             <div className="font-medium text-sm truncate">{h.query}</div>
             <div className="text-xs text-slate-500">{new Date(h.ts).toLocaleTimeString()}</div>
@@ -438,10 +444,10 @@ export default function Home() {
                 step.status === "success"
                   ? "bg-gradient-to-r from-lime-50 to-lime-100 text-lime-800 border-lime-200"
                   : step.status === "in_progress"
-                  ? "bg-gradient-to-r from-neutral-100 to-neutral-200 text-neutral-800 border-neutral-200"
-                  : step.status === "error"
-                  ? "bg-gradient-to-r from-red-50 to-red-100 text-red-800 border-red-200"
-                  : "bg-slate-50 text-slate-600 border-slate-200";
+                    ? "bg-gradient-to-r from-neutral-100 to-neutral-200 text-neutral-800 border-neutral-200"
+                    : step.status === "error"
+                      ? "bg-gradient-to-r from-red-50 to-red-100 text-red-800 border-red-200"
+                      : "bg-slate-50 text-slate-600 border-slate-200";
               const icon =
                 step.status === "success" ? (
                   <CheckCircle2 size={14} />
@@ -485,7 +491,7 @@ export default function Home() {
         </div>
         <div className="flex flex-wrap gap-3 text-xs">
           <select
-              className="border rounded px-2 py-1"
+            className="border rounded px-2 py-1"
             value={filters.remote}
             onChange={(e) => setFilters((f) => ({ ...f, remote: e.target.value as any }))}
           >
@@ -525,46 +531,46 @@ export default function Home() {
         </div>
         <div className="flex-1 overflow-y-auto pr-1">
           <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-3">
-          {filteredResults.length === 0 && (
-            <div className="text-sm text-slate-500">No results yet. Submit a query to see recommendations.</div>
-          )}
-          {filteredResults.map((r, idx) => (
-            <div key={idx} className="border rounded-xl p-4 shadow-sm hover:shadow-md transition bg-slate-50 border-slate-200">
-              <div className="flex items-start justify-between gap-2">
-                <a
-                  href={r.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-neutral-900 hover:text-neutral-700"
-                >
-                  {r.name || "Untitled"}
-                </a>
-                <button
-                  className="text-slate-500 hover:text-neutral-700"
-                  onClick={() => r.url && navigator.clipboard.writeText(r.url)}
-                >
-                  <LinkIcon size={16} />
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {r.test_type?.map((t) => (
-                  <span key={t} className="text-[11px] bg-neutral-100 text-neutral-800 px-2 py-1 rounded-full border border-neutral-200">
-                    {t}
+            {filteredResults.length === 0 && (
+              <div className="text-sm text-slate-500">No results yet. Submit a query to see recommendations.</div>
+            )}
+            {filteredResults.map((r, idx) => (
+              <div key={idx} className="border rounded-xl p-4 shadow-sm hover:shadow-md transition bg-slate-50 border-slate-200">
+                <div className="flex items-start justify-between gap-2">
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-neutral-900 hover:text-neutral-700"
+                  >
+                    {r.name || "Untitled"}
+                  </a>
+                  <button
+                    className="text-slate-500 hover:text-neutral-700"
+                    onClick={() => r.url && navigator.clipboard.writeText(r.url)}
+                  >
+                    <LinkIcon size={16} />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {r.test_type?.map((t) => (
+                    <span key={t} className="text-[11px] bg-neutral-100 text-neutral-800 px-2 py-1 rounded-full border border-neutral-200">
+                      {t}
+                    </span>
+                  ))}
+                  <span className="text-[11px] bg-slate-100 text-slate-700 px-2 py-1 rounded-full border border-slate-200">
+                    {r.duration ? `${r.duration} min` : "Duration unknown"}
                   </span>
-                ))}
-                <span className="text-[11px] bg-slate-100 text-slate-700 px-2 py-1 rounded-full border border-slate-200">
-                  {r.duration ? `${r.duration} min` : "Duration unknown"}
-                </span>
-                <span className="text-[11px] bg-lime-50 text-lime-700 px-2 py-1 rounded-full border border-lime-100">
-                  Remote: {r.remote_support || "?"}
-                </span>
-                <span className="text-[11px] bg-neutral-100 text-neutral-800 px-2 py-1 rounded-full border border-neutral-200">
-                  Adaptive: {r.adaptive_support || "?"}
-                </span>
+                  <span className="text-[11px] bg-lime-50 text-lime-700 px-2 py-1 rounded-full border border-lime-100">
+                    Remote: {r.remote_support || "?"}
+                  </span>
+                  <span className="text-[11px] bg-neutral-100 text-neutral-800 px-2 py-1 rounded-full border border-neutral-200">
+                    Adaptive: {r.adaptive_support || "?"}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-700 mt-2 overflow-hidden text-ellipsis">{r.description || "No description."}</p>
               </div>
-              <p className="text-sm text-slate-700 mt-2 overflow-hidden text-ellipsis">{r.description || "No description."}</p>
-            </div>
-          ))}
+            ))}
           </div>
         </div>
       </div>
