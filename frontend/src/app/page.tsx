@@ -107,7 +107,6 @@ export default function Home() {
   const [verbose, setVerbose] = useLocalStorage("verbose", false);
   const [llmModel, setLlmModel] = useLocalStorage("llm_model", "Qwen/Qwen2.5-1.5B-Instruct");
   const [query, setQuery] = useState("");
-  const [clarification, setClarification] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<Stats | null>(INITIAL_STATS);
@@ -220,7 +219,6 @@ export default function Home() {
     const controller = new AbortController();
     abortRef.current = controller;
     const body: any = { query, verbose };
-    if (clarification.trim()) body.clarification_answer = clarification.trim();
     if (mode === "recommend" && llmModel) body.llm_model = llmModel;
     const id = crypto.randomUUID();
     const ts = Date.now();
@@ -235,7 +233,7 @@ export default function Home() {
       );
       setActiveIndex(history.length); // new item index
       setQuery("");
-      setClarification("");
+      // no clarification field to reset
     } catch (err: any) {
       setHistory((h) => h.map((item) => (item.id === id ? { ...item, error: err.message } : item)));
     } finally {
@@ -248,7 +246,9 @@ export default function Home() {
     <div className="flex items-center justify-between mb-2">
       <div>
         <h1 className="text-3xl font-semibold text-neutral-800">SHL Assessment Recommender</h1>
-        <p className="text-sm text-neutral-600">Chat to get top-10 assessments. Filters and debug on the right.</p>
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 shadow-sm">
+          Note: Responses can take ~1–2 minutes (2sec if cached) on the HF Spaces free CPU (Qwen loads on-demand; 16GB RAM). This model choice was made after extensive evals; see the GitHub docs for details. Your request will complete.
+        </div>
       </div>
     </div>
   );
@@ -269,9 +269,9 @@ export default function Home() {
       </div>
       <div className="bg-gradient-to-r from-lime-50 to-white border border-lime-100 rounded-lg shadow-sm p-2 col-span-1 lg:col-span-2">
         <div className="text-[11px] text-neutral-500">
-          Job levels ({stats?.unique_job_levels ?? "—"})
+          Job levels (<span className="font-semibold text-neutral-800">{stats?.unique_job_levels ?? "—"}</span>)
         </div>
-        <div className="text-xs text-neutral-700 truncate">
+        <div className="text-xs text-neutral-700 whitespace-nowrap overflow-x-auto">
           {stats?.job_levels && stats.job_levels.length ? stats.job_levels.join(", ") : "N/A"}
         </div>
       </div>
@@ -367,12 +367,6 @@ export default function Home() {
           ))}
         </div>
         <div className="flex gap-3 items-center">
-          <input
-            className="border rounded px-2 py-1 text-sm flex-1"
-            placeholder="Clarification (if asked)"
-            value={clarification}
-            onChange={(e) => setClarification(e.target.value)}
-          />
           <button
             onClick={send}
             disabled={loading}
@@ -397,7 +391,6 @@ export default function Home() {
           <button
             onClick={() => {
               setQuery(SAMPLE_PROMPTS[0]);
-              setClarification("");
             }}
             className="p-2 border rounded-lg hover:bg-slate-100"
             title="Reset"
@@ -436,7 +429,6 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <RefreshCw size={14} />
-            Pipeline
           </div>
         </div>
         <div className="flex flex-col gap-2">
