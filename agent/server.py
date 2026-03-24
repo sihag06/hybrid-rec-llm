@@ -127,9 +127,13 @@ def _build_plan_with_fallback(query: str, vocab: dict, llm_extractor):
     Build the query plan using the LLM rewriter (Qwen) when available, otherwise
     fall back to deterministic rewrite. No Gemini refinement to keep behavior predictable.
     """
+    t0 = time.time()
     try:
-        return build_query_plan(query, vocab=vocab, llm_extractor=llm_extractor)
-    except Exception:
+        res = build_query_plan(query, vocab=vocab, llm_extractor=llm_extractor)
+        print(f"[PLANBUILD] LLM plan built in {time.time()-t0:.2f}s")
+        return res
+    except Exception as e:
+        print(f"[PLANBUILD] LLM plan failed in {time.time()-t0:.2f}s: {e}")
         return build_query_plan(query, vocab=vocab)
 
 

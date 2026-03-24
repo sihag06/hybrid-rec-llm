@@ -20,7 +20,7 @@ export async function fetchRecommend(base: string, body: RecommendRequest, signa
 
 async function request(url: string, body: any, signal?: AbortSignal) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), 120000); // 120 seconds for slow CPU inference
   try {
     const res = await fetch(url, {
       method: "POST",
