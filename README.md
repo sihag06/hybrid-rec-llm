@@ -9,7 +9,8 @@
 - Rewrite/plan: deterministic + LLM (Qwen/NuExtract; FLAN fallback) before retrieval
 - Serve/UI: FastAPI (`/recommend`) + Next.js frontend
 
-For design rationale, metrics, and ablations, see `experiments/README.md`.
+For design rationale, metrics, and ablations, see [experiments/README.md](https://github.com/AGAMPANDEYY/llm_recommendation_engine/tree/main/experiments).
+2 page report can be found [here]()
 
 ## Architecture at a glance
 
