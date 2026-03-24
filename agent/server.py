@@ -9,7 +9,7 @@ Run:
 
 import uuid
 import json
-from typing import Optional, Callable
+from typing import Optional, Callable, List, Dict, Any
 from collections import deque
 import time
 import math
@@ -32,6 +32,7 @@ from tools.query_plan_tool import build_query_plan
 from tools.query_plan_tool_llm import build_query_plan_llm
 from llm.nu_extract import NuExtractWrapper, default_query_rewrite_examples
 from llm.qwen_rewriter import QwenRewriter
+from llm.flan_rewriter import FlanRewriter
 from tools.retrieve_tool import retrieve_candidates
 from tools.rerank_tool import rerank_candidates
 from tools.constraints_tool import apply_constraints
@@ -82,12 +83,32 @@ def load_resources(llm_model_override: Optional[str] = None):
     llm_model = llm_model_override or os.getenv("LLM_MODEL", "").strip()
     if not llm_model:
         llm_model = "Qwen/Qwen2.5-1.5B-Instruct"
+
+    def _normalize_llm_name(name: str) -> str:
+        n = name.strip()
+        low = n.lower().replace(" ", "")
+        if "flan" in low and "t5" in low:
+            return "google/flan-t5-small"
+        return n
+
+    llm_model = _normalize_llm_name(llm_model)
+    print(f"[LLM] requested model='{llm_model_override}' normalized='{llm_model}' env='{os.getenv('LLM_MODEL','')}'")
+
     try:
-        if llm_model.lower().startswith("qwen"):
+        lower_name = llm_model.lower()
+        if lower_name.startswith("qwen"):
+            print(f"[LLM] initializing QwenRewriter with {llm_model}")
             llm_extractor = QwenRewriter(model_name=llm_model, default_examples=default_query_rewrite_examples())
+        elif "flan" in lower_name:
+            print(f"[LLM] initializing FlanRewriter with {llm_model}")
+            llm_extractor = FlanRewriter(model_name=llm_model, default_examples=default_query_rewrite_examples())
         elif not os.getenv("GOOGLE_API_KEY"):
+            print("[LLM] initializing NuExtractWrapper")
             llm_extractor = NuExtractWrapper(default_examples=default_query_rewrite_examples())
-    except Exception:
+        else:
+            print("[LLM] no LLM extractor selected")
+    except Exception as e:
+        print(f"[LLM] failed to init '{llm_model}': {e}")
         llm_extractor = None
     return df_catalog, bm25, vec, reranker, lookup, vocab, llm_extractor, catalog_by_id
 
@@ -173,15 +194,58 @@ def _format_test_types(meta: dict) -> list[str]:
     return out
 
 
+class Timeline:
+    """Lightweight event collector for pipeline steps."""
+
+    def __init__(self):
+        self.events: List[Dict[str, Any]] = []
+
+    def add(self, name: str, status: str = "start", detail: Optional[str] = None, extras: Optional[dict] = None):
+        self.events.append(
+            {
+                "name": name,
+                "status": status,
+                "ts": time.time(),
+                "detail": detail,
+                "extras": extras or {},
+            }
+        )
+
+
 def _run_pipeline(query: str, topn: int = 200, verbose: bool = False, llm_model: Optional[str] = None):
+    timeline = Timeline()
     if verbose:
         # For debugging, bypass cached resources to ensure fresh state
         load_resources.cache_clear()
     df_catalog, bm25, vec, reranker, lookup, vocab, llm_extractor, catalog_by_id = load_resources(llm_model_override=llm_model)
+
+    # Plan
+    timeline.add("plan", "start")
     plan = _build_plan_with_fallback(query, vocab=vocab, llm_extractor=llm_extractor)
+    print(f"[PIPELINE] plan_source={getattr(plan, 'plan_source', 'unknown')} llm_debug={getattr(plan, 'llm_debug', None)}")
+    timeline.add("plan", "success")
+
+    # Retrieve + fusion
+    timeline.add("retrieve", "start")
     cand_set = retrieve_candidates(plan, bm25, vec, topn=topn, catalog_df=df_catalog)
+    timeline.add(
+        "retrieve",
+        "success",
+        extras={
+            "candidates": len(getattr(cand_set, "candidates", []) or []),
+            "fusion": getattr(cand_set, "fusion", None),
+        },
+    )
+
+    # Rerank
+    timeline.add("rerank", "start")
     ranked = rerank_candidates(plan, cand_set, reranker, df_catalog, k=10)
+    timeline.add("rerank", "success", extras={"reranked": len(getattr(ranked, "items", []) or [])})
+
+    # Constraints/post-processing
+    timeline.add("constraints", "start")
     final_list = apply_constraints(plan, ranked, catalog_by_id, k=10)
+    timeline.add("constraints", "success", extras={"final": len(getattr(final_list, "items", []) or [])})
 
     debug_payload = {}
     if verbose:
@@ -218,6 +282,7 @@ def _run_pipeline(query: str, topn: int = 200, verbose: bool = False, llm_model:
             }
             for r in final_list.items
         ]
+        debug_payload["timeline"] = timeline.events
 
     final_results = []
     for item in final_list.items:

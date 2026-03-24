@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Settings, RefreshCw, Filter, Bug, Link as LinkIcon, Search, SlidersHorizontal } from "lucide-react";
+import {
+  Send,
+  Settings,
+  RefreshCw,
+  Filter,
+  Bug,
+  Link as LinkIcon,
+  Search,
+  SlidersHorizontal,
+  CheckCircle2,
+  Loader2,
+  XCircle,
+} from "lucide-react";
 import { fetchChat, fetchRecommend } from "@/lib/api";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import type { Assessment, ChatResponse, DebugPayload } from "@/types";
@@ -21,9 +33,43 @@ const SAMPLE_PROMPTS = [
 ];
 
 type Mode = "recommend" | "chat";
+type TimelineStatus = "pending" | "in_progress" | "success" | "error";
+type TimelineStep = { key: string; label: string; status: TimelineStatus };
+const TIMELINE_ORDER: Array<{ key: string; label: string }> = [
+  { key: "plan", label: "Plan" },
+  { key: "retrieve", label: "Retrieve" },
+  { key: "rerank", label: "Rerank" },
+  { key: "constraints", label: "Finalize" },
+];
+
+const DEFAULT_API_BASE = "https://agamp-llm-recommendation-backend.hf.space";
+
+function buildTimeline(backendTimeline: any, loading: boolean): TimelineStep[] {
+  const status: Record<string, TimelineStatus> = {};
+  TIMELINE_ORDER.forEach((s) => (status[s.key] = "pending"));
+
+  if (Array.isArray(backendTimeline)) {
+    for (const ev of backendTimeline) {
+      const key = ev?.name;
+      if (!key || !(key in status)) continue;
+      const st = ev?.status;
+      if (st === "start") status[key] = "in_progress";
+      else if (st === "success") status[key] = "success";
+      else if (st === "error") status[key] = "error";
+    }
+  } else if (loading) {
+    // Request in-flight without timeline data yet
+    status[TIMELINE_ORDER[0].key] = "in_progress";
+  }
+
+  return TIMELINE_ORDER.map((s) => ({
+    ...s,
+    status: status[s.key],
+  }));
+}
 
 export default function Home() {
-  const [apiBase, setApiBase] = useLocalStorage("api_base", "http://localhost:8000");
+  const [apiBase, setApiBase] = useLocalStorage("api_base", DEFAULT_API_BASE);
   const [mode, setMode] = useLocalStorage<Mode>("mode", "recommend");
   const [verbose, setVerbose] = useLocalStorage("verbose", false);
   const [llmModel, setLlmModel] = useLocalStorage("llm_model", "Qwen/Qwen2.5-1.5B-Instruct");
@@ -39,6 +85,8 @@ export default function Home() {
     duration: "any" as "any" | "<=20" | "<=40" | "<=60" | "unknown",
     sort: "match" as "match" | "short" | "adaptive",
   });
+  const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>(buildTimeline([], false));
+  const defaultApi = "https://huggingface.co/spaces/AgamP/llm_recommendation_backend";
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -53,6 +101,11 @@ export default function Home() {
     activeItem?.response?.final_results ||
     []) as Assessment[];
   const debug = activeItem?.response?.debug as DebugPayload | undefined;
+  const backendTimeline = (debug as any)?.timeline;
+
+  useEffect(() => {
+    setTimelineSteps(buildTimeline(backendTimeline, loading));
+  }, [backendTimeline, loading]);
 
   const filteredResults = useMemo(() => {
     let res = [...activeResults];
@@ -90,9 +143,12 @@ export default function Home() {
     return res;
   }, [activeResults, filters]);
 
+  const effectiveApiBase = apiBase?.trim() || DEFAULT_API_BASE;
+
   const send = async () => {
     if (!query.trim()) return;
     setLoading(true);
+    setTimelineSteps(buildTimeline([], true));
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -105,8 +161,8 @@ export default function Home() {
     try {
       const res =
         mode === "chat"
-          ? await fetchChat(apiBase, body, controller.signal)
-          : await fetchRecommend(apiBase, body, controller.signal);
+          ? await fetchChat(effectiveApiBase, body, controller.signal)
+          : await fetchRecommend(effectiveApiBase, body, controller.signal);
       setHistory((h) =>
         h.map((item) => (item.id === id ? { ...item, response: res, error: undefined } : item))
       );
@@ -181,7 +237,7 @@ export default function Home() {
           <label className="font-medium min-w-[70px]">API base</label>
           <input
             className="border rounded px-2 py-1 w-full"
-            value={apiBase}
+            value={apiBase || DEFAULT_API_BASE}
             onChange={(e) => setApiBase(e.target.value)}
           />
         </div>
@@ -261,23 +317,67 @@ export default function Home() {
 
   const resultsPanel = (
     <div className="flex flex-col h-full">
-      <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-3">
+      <div className="bg-white border rounded-xl shadow-sm p-4 flex flex-col gap-3 h-[75vh]">
         <div className="flex items-center justify-between">
           <div className="text-lg font-semibold flex items-center gap-2">
             <Filter size={18} /> Results
           </div>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                className="pl-8 pr-3 py-2 border rounded-lg text-sm"
-                placeholder="Search results"
-                value={filters.search}
-                onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-              />
-            </div>
-            <SlidersHorizontal size={16} className="text-slate-500" />
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <RefreshCw size={14} />
+            Pipeline
           </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {timelineSteps.map((step, idx) => {
+              const color =
+                step.status === "success"
+                  ? "bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-800 border-emerald-200"
+                  : step.status === "in_progress"
+                  ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-800 border-blue-200"
+                  : step.status === "error"
+                  ? "bg-gradient-to-r from-red-50 to-red-100 text-red-800 border-red-200"
+                  : "bg-slate-50 text-slate-600 border-slate-200";
+              const icon =
+                step.status === "success" ? (
+                  <CheckCircle2 size={14} />
+                ) : step.status === "in_progress" ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : step.status === "error" ? (
+                  <XCircle size={14} />
+                ) : (
+                  <div className="h-3 w-3 rounded-full bg-slate-300" />
+                );
+              return (
+                <div key={step.key} className="flex items-center gap-2">
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-full shadow-sm text-xs transition ${color}`}
+                  >
+                    {icon}
+                    <span className="font-semibold whitespace-nowrap">{step.label}</span>
+                  </div>
+                  {idx < timelineSteps.length - 1 && <div className="h-[2px] w-6 bg-slate-200 rounded-full" />}
+                </div>
+              );
+            })}
+          </div>
+          {!verbose && (
+            <div className="text-[11px] text-slate-500">
+              Turn on “Verbose debug” to see live pipeline status from the backend.
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              className="pl-8 pr-3 py-2 border rounded-lg text-sm"
+              placeholder="Search results"
+              value={filters.search}
+              onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+            />
+          </div>
+          <SlidersHorizontal size={16} className="text-slate-500" />
         </div>
         <div className="flex flex-wrap gap-3 text-xs">
           <select
@@ -319,7 +419,8 @@ export default function Home() {
             <option value="adaptive">Sort: Adaptive first</option>
           </select>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-3">
+        <div className="flex-1 overflow-y-auto pr-1">
+          <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-3">
           {filteredResults.length === 0 && (
             <div className="text-sm text-slate-500">No results yet. Submit a query to see recommendations.</div>
           )}
@@ -360,6 +461,7 @@ export default function Home() {
               <p className="text-sm text-slate-700 mt-2 overflow-hidden text-ellipsis">{r.description || "No description."}</p>
             </div>
           ))}
+          </div>
         </div>
       </div>
       {verbose && debug && (

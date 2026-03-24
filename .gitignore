@@ -14,7 +14,11 @@ venv/
 runs/
 frontend/.next/
 frontend/node_modules/
+frontend/out/
 .model_cache/
 data
 data/
 models/reranker_crossenc/v0.1.0/
+Hugging Face – The AI community building the future._files
+Hugging Face – The AI community building the future..html
+models/

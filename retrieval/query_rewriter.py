@@ -621,12 +621,53 @@ def _rewrite_with_llm(raw_text: str, catalog_vocab: Optional[Dict[str, List[str]
     caller can fall back to deterministic rewrite.
     """
     try:
+        print(f"[LLM-RW] invoking {getattr(llm_extractor, 'model_name', type(llm_extractor))} on text='{raw_text[:80]}'")
         raw = llm_extractor.predict(text=raw_text, schema=LLM_SCHEMA, return_full=True)
+        print(f"[LLM-RW] raw type={type(raw)} keys={list(raw.keys()) if isinstance(raw, dict) else 'n/a'}")
+        if isinstance(raw, dict):
+            print(
+                f"[LLM-RW] raw_output head='{str(raw.get('raw_output',''))[:200]}' "
+                f"clean_output head='{str(raw.get('clean_output',''))[:200]}'"
+            )
         if "_extract_json_text" in globals():
             raw_json = _extract_json_text(raw)
         else:
             raw_json = raw.get("clean_output") if isinstance(raw, dict) else raw
-        data = _coerce_json(raw_json) if "_coerce_json" in globals() else json.loads(raw_json)
+        if not raw_json and isinstance(raw, dict) and raw.get("raw_output"):
+            raw_json = raw.get("raw_output")
+        print(f"[LLM-RW] raw_json head='{str(raw_json)[:120]}'")
+
+        # If the model did not return JSON, coerce a minimal payload
+        data = None
+        if isinstance(raw_json, str) and "{" not in raw_json:
+            data = {
+                "retrieval_query": raw_json,
+                "rerank_query": raw_text,
+                "intent": None,
+                "must_have_skills": [],
+                "soft_skills": [],
+                "role_terms": [],
+                "negated_skills": [],
+                "constraints": {"duration": None, "job_levels": [], "languages": [], "experience": None, "flags": {"remote": None, "adaptive": None}},
+                "llm_coerced": True,
+            }
+        else:
+            data = _coerce_json(raw_json) if "_coerce_json" in globals() else json.loads(raw_json)
+        try:
+            print(
+                "[LLM-RW] parsed data:",
+                {
+                    "retrieval_query": str(data.get("retrieval_query"))[:80],
+                    "rerank_query": str(data.get("rerank_query"))[:80],
+                    "intent": data.get("intent"),
+                    "must_have_skills": data.get("must_have_skills"),
+                    "soft_skills": data.get("soft_skills"),
+                    "role_terms": data.get("role_terms"),
+                    "duration": data.get("constraints", {}).get("duration") if isinstance(data.get("constraints"), dict) else None,
+                },
+            )
+        except Exception:
+            pass
 
         dur = data.get("constraints", {}).get("duration") or {}
         duration_obj = None
@@ -684,13 +725,18 @@ def _rewrite_with_llm(raw_text: str, catalog_vocab: Optional[Dict[str, List[str]
             }
             if duration_error:
                 rw.llm_debug["duration_error"] = duration_error
+            if isinstance(data, dict) and data.get("llm_coerced"):
+                rw.llm_debug["warning"] = "non_json_output_coerced"
         if placeholder:
             if rw.llm_debug is None:
                 rw.llm_debug = {}
             rw.llm_debug["error"] = "placeholder_output"
+            print("[LLM-RW] placeholder output, falling back")
             return None
+        print(f"[LLM-RW] success model={rw.llm_debug.get('model') if rw.llm_debug else getattr(llm_extractor,'model_name','llm')} intent={intent_final}")
         return rw
-    except Exception:
+    except Exception as e:
+        print(f"[LLM-RW] error: {e}")
         return None
     """Try to rewrite via NuExtract (LLM) using a JSON schema; return None on failure."""
     schema ={
@@ -825,11 +871,18 @@ def rewrite_query(raw_text: str, catalog_vocab: Optional[Dict[str, List[str]]] =
     # LLM-based rewrite first if provided
     llm_fail_debug = None
     if llm_extractor:
+        print(f"[REWRITE] using LLM extractor {getattr(llm_extractor, 'model_name', type(llm_extractor))}")
         llm_rw = _rewrite_with_llm(raw_text, catalog_vocab, llm_extractor)
         if llm_rw and not (llm_rw.llm_debug and llm_rw.llm_debug.get("error")):
-            return llm_rw
+            # If LLM returned coerced/non-JSON output, fall back to deterministic rewrite for richer fields.
+            warning = llm_rw.llm_debug.get("warning") if llm_rw.llm_debug else None
+            if warning and "coerced" in warning:
+                print("[REWRITE] LLM output was coerced/non-JSON; falling back to deterministic rewrite.")
+            else:
+                return llm_rw
         if llm_rw and llm_rw.llm_debug:
             llm_fail_debug = llm_rw.llm_debug
+            print(f"[REWRITE] LLM rewrite failed, llm_debug={llm_fail_debug}")
 
     tokens = tokenize(low)
     tokens = strip_locations(tokens)
