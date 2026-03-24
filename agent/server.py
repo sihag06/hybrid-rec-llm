@@ -335,16 +335,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve the pre-built Next.js static export (produced by `npm run build`)
+# Note: Static assets are now handled by the catch-all route at the bottom
 _FRONTEND_OUT = os.path.join(os.path.dirname(__file__), "..", "frontend", "out")
-if os.path.isdir(_FRONTEND_OUT):
-    # Next.js assets are usually in /_next/...
-    _NEXT_ASSETS = os.path.join(_FRONTEND_OUT, "_next")
-    if os.path.isdir(_NEXT_ASSETS):
-        app.mount("/_next", StaticFiles(directory=_NEXT_ASSETS), name="next-assets")
-    
-    # Fallback mount for other static files (images, etc. in 'public')
-    app.mount("/static", StaticFiles(directory=_FRONTEND_OUT), name="static")
 
 # Simple in-process rate limiter (max 5 requests per second)
 _timestamps = deque()
@@ -394,8 +386,20 @@ def recommend(req: RecommendRequest):
 def health():
     return {"status": "healthy"}
 
-@app.get("/")
-def index():
-    # Serve the pre-built Next.js SPA entry point
-    out_index = os.path.join(os.path.dirname(__file__), "..", "frontend", "out", "index.html")
-    return FileResponse(out_index)
+@app.get("/{path:path}")
+def catch_all(path: str):
+    # Check if the requested path exists as a static file in the frontend/out directory
+    if _FRONTEND_OUT and os.path.isdir(_FRONTEND_OUT):
+        file_path = os.path.join(_FRONTEND_OUT, path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        # If it's the root or a missing path, serve index.html (Next.js SPA behavior)
+        if not path or path == "/":
+            return FileResponse(os.path.join(_FRONTEND_OUT, "index.html"))
+    
+    # If no file found, you might want to return 404 or index for SPA
+    index_path = os.path.join(_FRONTEND_OUT, "index.html")
+    if os.path.isfile(index_path):
+         return FileResponse(index_path)
+    return {"error": "frontend not found"}
