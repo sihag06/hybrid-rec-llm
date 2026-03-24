@@ -1,4 +1,7 @@
 .venv/
+.env
+.env.local
+.env.*
 __pycache__/
 .pytest_cache/
 *.sqlite
@@ -6,15 +9,18 @@ logs/
 data/crawler.db
 data/catalog.parquet
 data/catalog.jsonl
-playwright-report/
-playwright/.cache/
-node_modules/
-venv/
-runs/
+.DS_Store
+hybrid-rec-llm/
+server.log
+frontend/out/
 frontend/.next/
 frontend/node_modules/
+node_modules/
+playwright-report/
+playwright/.cache/
+venv/
+runs/
 .model_cache/
 Hugging Face – The AI community building the future._files
 Hugging Face – The AI community building the future..html
 SHL_AI_Research_InternPS.pdf
-.DS_Store
