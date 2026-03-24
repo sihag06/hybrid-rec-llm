@@ -335,10 +335,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend assets
 # Serve the pre-built Next.js static export (produced by `npm run build`)
 _FRONTEND_OUT = os.path.join(os.path.dirname(__file__), "..", "frontend", "out")
 if os.path.isdir(_FRONTEND_OUT):
+    # Next.js assets are usually in /_next/...
+    _NEXT_ASSETS = os.path.join(_FRONTEND_OUT, "_next")
+    if os.path.isdir(_NEXT_ASSETS):
+        app.mount("/_next", StaticFiles(directory=_NEXT_ASSETS), name="next-assets")
+    
+    # Fallback mount for other static files (images, etc. in 'public')
     app.mount("/static", StaticFiles(directory=_FRONTEND_OUT), name="static")
 
 # Simple in-process rate limiter (max 5 requests per second)
