@@ -56,6 +56,99 @@ docker run -p 8000:8000 --env-file .env llm-reco-backend #run
 -v $HOME/.cache/huggingface:/home/user/.cache/huggingface #for hf caching
 ```
 
+## Future Improvements : Advanced LLM & Agentic Extensions · RLHF/DPO · Knowledge Graph Retrieval
+
+> [!NOTE]
+> The roadmap below focuses on **incremental, production-safe evolution**: each component is modular, measurable, and designed to improve retrieval quality without destabilizing existing systems.
+
+---
+
+### Agentic Query Understanding
+Introduce an agentic orchestrator (planner · retriever · clarifier · executor) to iteratively refine underspecified or exploratory queries.
+
+- ReAct-style loop with tool use (retrieval, statistics, validation)
+- Conversation used to **reduce plan entropy**, not replace retrieval
+- Finalized plans are compact, structured, and execution-ready
+
+---
+
+### Knowledge Graph (KG) Augmentation
+Build a lightweight recruitment knowledge graph to enrich understanding and retrieval.
+
+**Entities**
+- Roles, skills, assessments, test types, companies
+
+**Relations**
+- `requires_skill`, `measures_competency`
+- `commonly_used_for_role`, `preferred_by_company`
+
+**Integration Points**
+- Rewrite: role/skill expansion via graph neighborhoods  
+- Retrieval: graph-based query expansion  
+- Rerank: graph distance as a scoring feature  
+
+Hybrid fusion of **BM25 + dense embeddings + KG embeddings** (TransE / node2vec).
+
+---
+
+### Personalization
+Learn a company-specific profile vector from historical interactions.
+
+- Bias fusion weights and rerank scores
+- Modulate constraints based on hiring patterns
+
+```python 
+score(d) = α · s_rerank + β · s_retrieval + γ · s_company(d)
+```
+`s_company` is learned from past hires, feedback, and preferences.
+
+---
+
+### Learning From Human Feedback
+Continuously improve models using logged recruiter interactions.
+
+- Log: `(query, plan, candidates, chosen, feedback)`
+- Train rerankers via **pairwise preference learning**
+- Train rewrite/planner models using **DPO** on positive vs. negative outcomes
+- Periodic refresh for alignment without unstable online RL
+
+---
+
+### Custom LLMs per Enterprise
+Enable enterprise-specific behavior with lightweight adapters.
+
+- Shared base rewrite model
+- Per-company or per-industry adapters (LoRA / PEFT)
+- Adapter swapping at inference time
+- CPU-friendly base with optional GPU acceleration for adapters
+
+Improves structured plans and reduces clarification overhead.
+
+---
+
+### Real-Time Adaptation
+Respond dynamically to ecosystem changes.
+
+- Detect query shifts, spikes, and emerging skills
+- Adjust vocabulary, fusion weights, and candidate depth
+- Invalidate cached plans on distribution shifts
+
+---
+
+### System Architecture Evolution
+A layered, modular architecture enabling safe iteration.
+
+- **Agentic orchestration layer** (LLM + tools)
+- **Hybrid retrieval core** (BM25 + dense + KG)
+- **Learning layer** (rerankers, adapters, preference models)
+- **Feedback & analytics loop**
+- **Policy & safety layer** (guardrails, explainability, auditability)
+
+> [!IMPORTANT]
+> Each layer can be upgraded independently, allowing continuous improvement while maintaining production stability.
+
+
+
 ### Quick commands (crawler + export + QA)
 
 ```bash
