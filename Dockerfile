@@ -35,4 +35,5 @@ COPY --from=frontend-builder /app/frontend/out ./frontend/out
 
 EXPOSE 7860
 
-CMD ["sh", "-c", "uvicorn agent.server:app --host 0.0.0.0 --port ${PORT} --workers 2"]
+# CMD ["sh", "-c", "uvicorn agent.server:app --host 0.0.0.0 --port ${PORT} --workers 2"]
+CMD ["uvicorn", "agent.server:app", "--host", "0.0.0.0", "--port", "7860"]
