@@ -24,10 +24,13 @@ jobs:
           git clone https://AgamP:$HF_TOKEN@huggingface.co/spaces/AgamP/llm_recommendation_backend hf_space
           
           # Replace Space contents with GitHub repo contents (except .git)
+    
           rsync -av --delete \
             --exclude ".git" \
             --exclude "hf_space" \
+            --exclude "*.pdf" \
             ./ hf_space/
+
 
           cd hf_space
           git add -A
