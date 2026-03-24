@@ -18,4 +18,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 8000
-CMD ["uvicorn", "agent.server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Render sets PORT; default to 8000 for local use
+ENV PORT=8000
+CMD ["sh", "-c", "uvicorn agent.server:app --host 0.0.0.0 --port ${PORT} --workers 2"]
