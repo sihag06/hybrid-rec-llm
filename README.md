@@ -24,11 +24,20 @@ For design rationale, metrics, and ablations, see [experiments/README.md](https:
 - Serving: FastAPI (`/recommend`, `/health`) + Next.js frontend (configurable API base).
 
 ## Hosted services
-- Backend (FastAPI) on Hugging Face Spaces: `https://agamp-llm-recommendation-backend.hf.space`
+- Backend (FastAPI) on Hugging Face Spaces: https://agamp-llm-recommendation-backend.hf.space 
   - Endpoints: `/recommend`, `/health`, `/chat` (planned).
   - Repo: https://huggingface.co/spaces/AgamP/llm_recommendation_backend/tree/main
   - Set the frontend API base to this URL for production.
 - Frontend (Next.js static) on Render (free tier): https://llm-recommendation-engine.onrender.com/
+
+Call the backend with CuRL
+```bash
+
+curl -i -X POST https://agamp-llm-recommendation-backend.hf.space/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Find a Java developer assessment"}'
+
+```
 
 ![platform frontend](media/frontend.png)
 
