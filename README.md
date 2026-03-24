@@ -10,7 +10,7 @@
 - Serve/UI: FastAPI (`/recommend`) + Next.js frontend
 
 For design rationale, metrics, and ablations, see [experiments/README.md](https://github.com/AGAMPANDEYY/llm_recommendation_engine/tree/main/experiments).
-2 page report can be found [here]()
+2 page report can be found [here](https://github.com/AGAMPANDEYY/llm_recommendation_engine/blob/main/Research_report.pdf)
 
 ## Architecture at a glance
 
