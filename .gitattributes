@@ -1,0 +1,8 @@
+models/reranker_crossenc/v0.1.0/model.safetensors filter=lfs diff=lfs merge=lfs -text
+models/reranker_crossenc/v0.1.0/tokenizer.json filter=lfs diff=lfs merge=lfs -text
+models/reranker_crossenc/v0.1.0/vocab.txt filter=lfs diff=lfs merge=lfs -text
+data/embeddings_bge/embeddings.npy filter=lfs diff=lfs merge=lfs -text
+*.pdf filter=lfs diff=lfs merge=lfs -text
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.jpeg filter=lfs diff=lfs merge=lfs -text
