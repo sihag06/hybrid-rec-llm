@@ -1,0 +1,5 @@
+retrieval:
+  method: hybrid_rrf
+  train_topn_candidates: 200
+  infer_topn_candidates: 100
+  rrf_k: 60

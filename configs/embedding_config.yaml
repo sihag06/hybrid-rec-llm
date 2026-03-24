@@ -1,0 +1,10 @@
+model:
+  name: sentence-transformers/all-MiniLM-L6-v2
+  cache_dir: .model_cache
+  device: cpu
+  normalize_embeddings: true
+  batch_size: 32
+
+preprocessing:
+  max_length: 512
+  padding: false

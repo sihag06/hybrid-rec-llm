@@ -1,0 +1,43 @@
+app:
+  name: llm-recommendation-engine
+  environment: local
+  log_level: INFO
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  cache_dir: data/cache
+
+index:
+  type: faiss
+  dim: 384
+  store_path: data/index/faiss.index
+
+models:
+  embedder: sentence-transformers/all-MiniLM-L6-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+
+services:
+  api:
+    host: 0.0.0.0
+    port: 8000
+  ui:
+    host: 0.0.0.0
+    port: 3000
+
+observability:
+  tracing_enabled: false
+  metrics_endpoint: /metrics
+
+storage:
+  bucket: s3://placeholder-bucket
+  prefix: recommendations
+
+crawler:
+  start_url: https://www.shl.com/products/product-catalog/
+  user_agent: llm-recommendation-engine/0.1 (+https://example.com)
+  max_concurrency: 2
+  request_delay_seconds: 1.5
+  jitter_seconds: 0.5
+  max_retries: 3
+  sqlite_path: data/crawler.db

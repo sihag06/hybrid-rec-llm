@@ -1,0 +1,15 @@
+{
+  "features": [
+    "rank_bm25",
+    "rank_vec",
+    "rank_rrf",
+    "bm25_score",
+    "vec_score",
+    "rrf_score",
+    "duration_minutes",
+    "remote_support",
+    "adaptive_support",
+    "has_duration_constraint",
+    "duration_constraint_minutes"
+  ]
+}

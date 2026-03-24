@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      LLM_MODEL: Qwen/Qwen2.5-1.5B-Instruct
+      HF_HOME: /cache/hf
+    volumes:
+      - ./data:/app/data:ro
+      - ./models:/app/models:ro
+      - hf-cache:/cache/hf
+
+  web:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE: http://api:8000
+    depends_on:
+      - api
+
+volumes:
+  hf-cache:

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assessment Recommender</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #f7f7f7; }
+    .container { max-width: 960px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    textarea, input { width: 100%; }
+    label { display: block; margin: 8px 0 4px; font-weight: 600; }
+    button { margin-top: 12px; padding: 10px 16px; cursor: pointer; }
+    pre { background: #111; color: #0f0; padding: 12px; border-radius: 4px; overflow: auto; max-height: 420px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row input[type="checkbox"] { width: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Assessment Recommender</h2>
+    <label for="api">API base URL</label>
+    <input id="api" type="text" placeholder="http://localhost:8000" />
+
+    <label for="query">Query</label>
+    <textarea id="query" rows="4" placeholder="Enter your query..."></textarea>
+
+    <label for="clarification">Clarification (optional)</label>
+    <input id="clarification" type="text" placeholder="If a clarification question was asked, answer here" />
+
+    <div class="row">
+      <input id="verbose" type="checkbox" />
+      <label for="verbose" style="margin: 0; font-weight: 400;">Verbose (debug)</label>
+    </div>
+
+    <button id="submit">Submit</button>
+
+    <h3>Response</h3>
+    <pre id="output">Awaiting input...</pre>
+  </div>
+
+  <script type="module" src="/static/main.js"></script>
+</body>
+</html>
