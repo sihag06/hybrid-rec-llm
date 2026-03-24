@@ -23,4 +23,6 @@ class CrossEncoderReranker:
     def score(self, query: str, doc: str) -> float:
         query = self._trim(query)
         doc = self._trim(doc)
-        return float(self.model.predict([[query, doc]]))
+        # Predict returns an array of shape (1,) for a single pair
+        scores = self.model.predict([[query, doc]])
+        return float(scores[0])
