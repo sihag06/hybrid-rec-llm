@@ -49,7 +49,7 @@ curl -i -X POST https://indr06-llm-recommendation-backend.hf.space/recommend \
 
 ```
 
-![platform frontend](media/frontend.png)
+
 
 ## Startup the system on local: Frontend + backend (Next.js + FastAPI)
 
